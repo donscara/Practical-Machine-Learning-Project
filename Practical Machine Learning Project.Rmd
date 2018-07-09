@@ -1,0 +1,145 @@
+---
+title: "Practical Machine Learning Project"
+author: "Donato Scarano"
+date: "06 luglio 2018"
+output: html_document
+---
+
+#Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+
+#Description
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+```{r echo=TRUE}
+library(caret)
+library(rpart.plot)
+library(rpart)
+library(randomForest)
+library(ggplot2)
+library(gbm)
+training<-read.csv("pml-training.csv")
+testing<-read.csv("pml-testing.csv")
+dim(training)
+dim(testing)
+```
+
+#Training and Testing
+
+Let us separate the train dataset in training,testing parts. we Use the 60-40 split and we set the seed to be safe that this is reproducible.
+```{r echo=TRUE}
+set.seed(1234)
+trainout<-createDataPartition(training$classe,p=0.7,list=FALSE)
+train<-training[trainout,]
+test<-training[-trainout,]
+dim(train)
+dim(test)
+```
+
+#Cleaning the Data
+
+Remove all columns that contains NA and remove features such as identification only variables and Near Zero Value.
+
+```{r echo=TRUE}
+navar <- sapply(train, function(x) mean(is.na(x)))>0.95
+train <- train[, navar==FALSE]
+test  <- test[,navar==FALSE]
+dim(train)
+dim(test)
+nzv<-nearZeroVar(train)
+train<-train[,-nzv]
+test<-test[,-nzv]
+dim(train)
+dim(test)
+train<-train[,-(1:5)]
+test<-test[,-(1:5)]
+dim(train)
+dim(test)
+```
+
+#Model Prediction 
+
+Three methods will be used: Random Forests, Decision Tree and Generalized Boosted and the one with higher accuracy will be used for the prediction.
+
+1) Random Forest
+
+```{r echo=TRUE}
+set.seed(1234)
+RFcheck<-trainControl(method = "cv", number = 3,verboseIter = FALSE)
+RFmod<-train(classe~.,data=train, method="rf", trControl=RFcheck)
+RFmod$finalModel
+```
+
+Confusion Matrix and Satistics for Random Forest
+
+```{r echo=TRUE}
+RFcst<-predict(RFmod, newdata = test)
+CMRD<-confusionMatrix(RFcst,test$classe)
+CMRD
+```
+
+Accuracy for the Random Forest method is: 1
+
+2) Decision Trees
+
+```{r echo=TRUE}
+set.seed(1234)
+DTmod<-rpart(classe~.,data=train,method="class")
+rpart.plot(DTmod)
+```
+
+Confusion Matrix and Satistics for Decision Tree
+
+```{r echo=TRUE}
+DTfcst<-predict(DTmod,newdata=test,type="class")
+CMDT<-confusionMatrix(DTfcst,test$classe)
+CMDT
+```
+
+Accuracy for the Random Forest method is: 0.76
+
+3) Generalized Boosted
+
+```{r echo=TRUE}
+set.seed(1234)
+GBcheck<-trainControl(method = "repeatedcv", number = 3, repeats=1)
+GBmod<-train(classe~.,data=train, method="gbm", trControl=GBcheck, verbose=FALSE)
+GBmod$finalModel
+```
+
+Confusion Matrix and Satistics for Generalized Boosted
+
+```{r echo=TRUE}
+GBfcst<-predict(GBmod,newdata=test,type="raw")
+CMGB<-confusionMatrix(GBfcst,test$classe)
+CMGB
+```
+
+Accuracy for the Generalized Boosted method is: 0.99
+
+Random Forest has the best accuracy among the three choices and we apply it to the test dataset.
+
+```{r echo=TRUE}
+testfcst<-predict(RFmod,testing)
+testfcst
+```
